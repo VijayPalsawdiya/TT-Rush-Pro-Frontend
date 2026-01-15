@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "984760125211",
+    "project_id": "possible-fabric-471106-q5",
+    "storage_bucket": "possible-fabric-471106-q5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:984760125211:android:efb199b3b1f29daf77b5be",
+        "android_client_info": {
+          "package_name": "com.ttrushproapp.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "984760125211-25ek77ob8v4p5vi7knk0q9gfsjgb3g3i.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ttrushproapp.app",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "984760125211-4hdl8u3ijb2rf85h4cc10bclpif3eo6c.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDteFkBF30O_WYW1yHvgHpHcJ5RI76Rbr8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "984760125211-4hdl8u3ijb2rf85h4cc10bclpif3eo6c.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "984760125211-9l6n4iiadhuv1m96t6j33jmc6fautcif.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.ttrushproapp.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,8 +1,10 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { User } from '@/types';
 import createContextHook from '@nkzw/create-context-hook';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import auth from '@react-native-firebase/auth';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { User } from '@/types';
 
 const AUTH_KEY = '@auth_user';
 const ONBOARDING_KEY = '@onboarding_completed';
@@ -14,6 +16,9 @@ export const [AuthContext, useAuth] = createContextHook(() => {
     const router = useRouter();
 
     useEffect(() => {
+        GoogleSignin.configure({
+            webClientId: '984760125211-4hdl8u3ijb2rf85h4cc10bclpif3eo6c.apps.googleusercontent.com', // TODO: Replace with your actual Web Client ID from Firebase Console -> Authentication -> Sign-in method -> Google -> Web SDK configuration
+        });
         loadUser();
     }, []);
 
@@ -40,10 +45,29 @@ export const [AuthContext, useAuth] = createContextHook(() => {
 
     const signInWithGoogle = useCallback(async () => {
         try {
-            const mockUser: User = {
-                id: '1',
-                email: 'user@example.com',
-                name: '',
+            // Check if your device supports Google Play
+            await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+            // Get the users ID token
+            const signInResult = await GoogleSignin.signIn();
+            const idToken = signInResult.data?.idToken;
+
+            if (!idToken) {
+                throw new Error('No ID token found');
+            }
+
+            // Create a Google credential with the token
+            const googleCredential = auth.GoogleAuthProvider.credential(idToken);
+
+            // Sign-in the user with the credential
+            const userCredential = await auth().signInWithCredential(googleCredential);
+            const firebaseUser = userCredential.user;
+
+            const newUser: User = {
+                id: firebaseUser.uid,
+                email: firebaseUser.email || '',
+                name: firebaseUser.displayName || 'Player',
+                photoUrl: firebaseUser.photoURL || undefined,
                 points: 0,
                 totalWins: 0,
                 totalLosses: 0,
@@ -52,9 +76,9 @@ export const [AuthContext, useAuth] = createContextHook(() => {
                 matchesPlayedWithDifferentPlayers: 0,
             };
 
-            await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(mockUser));
-            setUser(mockUser);
-            return mockUser;
+            await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(newUser));
+            setUser(newUser);
+            return newUser;
         } catch (error) {
             console.error('Error signing in:', error);
             throw error;
@@ -75,8 +99,11 @@ export const [AuthContext, useAuth] = createContextHook(() => {
     }, []);
 
     const logout = useCallback(async () => {
+        await GoogleSignin.revokeAccess();
+        await GoogleSignin.signOut();
         await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY]);
         setUser(null);
+        await auth().signOut();
         setHasCompletedOnboarding(false);
         router.replace('/login');
     }, [router]);

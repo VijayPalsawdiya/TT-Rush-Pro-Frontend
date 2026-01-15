@@ -1,9 +1,9 @@
-import { StyleSheet, Text, View, TouchableOpacity, Animated } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useEffect, useRef } from 'react';
-import { LinearGradient } from 'expo-linear-gradient';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function LoginScreen() {
     const router = useRouter();
@@ -32,7 +32,7 @@ export default function LoginScreen() {
             await signInWithGoogle();
             router.replace('/complete-profile');
         } catch (error) {
-            console.error('Sign in failed:', error);
+            console.log('Sign in failed:', error);
         }
     };
 

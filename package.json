@@ -15,6 +15,8 @@
     "@nkzw/create-context-hook": "^1.1.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-firebase/app": "^23.8.2",
+    "@react-native-firebase/auth": "^23.8.2",
+    "@react-native-google-signin/google-signin": "^16.1.1",
     "@rork-ai/toolkit-sdk": "^0.2.51",
     "@stardazed/streams-text-encoding": "^1.0.2",
     "@tanstack/react-query": "^5.90.16",
