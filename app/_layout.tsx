@@ -23,14 +23,23 @@ function RootLayoutNav() {
         const inEditProfile = segments[0] === 'edit-profile';
         const inUpcomingMatches = segments[0] === 'upcoming-matches';
         const inRecentMatches = segments[0] === 'recent-matches';
+        const inCompleteProfile = segments[0] === 'complete-profile';
 
+        // Not logged in - go to login
         if (!user && inAuthGroup) {
             router.replace('/login');
-        } else if (user && !user.name) {
+        }
+        // Logged in but profile incomplete - go to complete profile
+        else if (user && !user.isProfileComplete && !inCompleteProfile) {
+            console.log('📝 Profile incomplete, redirecting to complete-profile');
             router.replace('/complete-profile');
-        } else if (user && !hasCompletedOnboarding) {
+        }
+        // Profile complete but onboarding not done - go to onboarding
+        else if (user && user.isProfileComplete && !hasCompletedOnboarding) {
             router.replace('/onboarding');
-        } else if (user && user.name && hasCompletedOnboarding && !inAuthGroup && !inEditProfile && !inUpcomingMatches && !inRecentMatches) {
+        }
+        // Everything complete - go to home
+        else if (user && user.isProfileComplete && hasCompletedOnboarding && !inAuthGroup && !inEditProfile && !inUpcomingMatches && !inRecentMatches && !inCompleteProfile) {
             router.replace('/(tabs)/home');
         }
 

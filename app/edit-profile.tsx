@@ -6,7 +6,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Camera, Save } from 'lucide-react-native';
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { uploadService } from '@/services';
 
 export default function EditProfileScreen() {
     const router = useRouter();
@@ -16,17 +17,48 @@ export default function EditProfileScreen() {
     const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber || '');
     const [gameType, setGameType] = useState<GameType | undefined>(user?.gameType);
     const [photoUrl, setPhotoUrl] = useState(user?.photoUrl);
+    const [uploading, setUploading] = useState(false);
+    const [saving, setSaving] = useState(false);
 
     const pickImage = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.8,
-        });
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+                base64: true, // ✅ Get base64 for Cloudinary upload
+            });
 
-        if (!result.canceled) {
-            setPhotoUrl(result.assets[0].uri);
+            if (result.canceled) return;
+
+            const base64Image = result.assets[0].base64;
+            if (!base64Image) {
+                Alert.alert('Error', 'Failed to process image');
+                return;
+            }
+
+            setUploading(true);
+
+            try {
+                // ✅ Upload to Cloudinary
+                const cloudinaryUrl = await uploadService.uploadImage(
+                    `data:image/jpeg;base64,${base64Image}`,
+                    'profile-pictures'
+                );
+
+                console.log('✅ Image uploaded to Cloudinary:', cloudinaryUrl);
+                setPhotoUrl(cloudinaryUrl);
+                Alert.alert('Success', 'Image uploaded successfully!');
+            } catch (error) {
+                console.error('❌ Upload error:', error);
+                Alert.alert('Error', 'Failed to upload image. Please try again.');
+            } finally {
+                setUploading(false);
+            }
+        } catch (error) {
+            console.error('❌ Image picker error:', error);
+            Alert.alert('Error', 'Failed to pick image');
         }
     };
 
@@ -36,17 +68,26 @@ export default function EditProfileScreen() {
             return;
         }
 
-        await updateProfile({
-            name,
-            gender,
-            phoneNumber,
-            gameType,
-            photoUrl,
-        });
+        setSaving(true);
 
-        Alert.alert('Success', 'Profile updated successfully', [
-            { text: 'OK', onPress: () => router.back() }
-        ]);
+        try {
+            await updateProfile({
+                name,
+                gender,
+                phoneNumber,
+                gameType,
+                photoUrl,
+            });
+
+            Alert.alert('Success', 'Profile updated successfully', [
+                { text: 'OK', onPress: () => router.back() }
+            ]);
+        } catch (error) {
+            console.error('❌ Save error:', error);
+            Alert.alert('Error', 'Failed to update profile');
+        } finally {
+            setSaving(false);
+        }
     };
 
     const isValid = name && gender && phoneNumber && gameType;
@@ -70,7 +111,12 @@ export default function EditProfileScreen() {
 
             <ScrollView contentContainerStyle={styles.content}>
                 {/* Profile Photo */}
-                <TouchableOpacity style={styles.photoContainer} onPress={pickImage} activeOpacity={0.7}>
+                <TouchableOpacity
+                    style={styles.photoContainer}
+                    onPress={pickImage}
+                    activeOpacity={0.7}
+                    disabled={uploading}
+                >
                     {photoUrl ? (
                         <Image source={{ uri: photoUrl }} style={styles.photo} />
                     ) : (
@@ -79,7 +125,11 @@ export default function EditProfileScreen() {
                         </View>
                     )}
                     <View style={styles.photoOverlay}>
-                        <Camera size={16} color={Colors.background} />
+                        {uploading ? (
+                            <ActivityIndicator size="small" color={Colors.background} />
+                        ) : (
+                            <Camera size={16} color={Colors.background} />
+                        )}
                     </View>
                 </TouchableOpacity>
 
@@ -159,12 +209,16 @@ export default function EditProfileScreen() {
 
                 {/* Save Button */}
                 <TouchableOpacity
-                    style={[styles.saveButton, !isValid && styles.saveButtonDisabled]}
+                    style={[styles.saveButton, (!isValid || saving) && styles.saveButtonDisabled]}
                     onPress={handleSave}
-                    disabled={!isValid}
+                    disabled={!isValid || saving}
                     activeOpacity={0.8}
                 >
-                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                    {saving ? (
+                        <ActivityIndicator color={Colors.background} />
+                    ) : (
+                        <Text style={styles.saveButtonText}>Save Changes</Text>
+                    )}
                 </TouchableOpacity>
             </ScrollView>
         </View>

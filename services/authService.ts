@@ -8,6 +8,10 @@ export interface BackendUser {
     email: string;
     googleId: string;
     profilePicture?: string;
+    gender?: 'male' | 'female';
+    phoneNumber?: string;
+    gameType?: 'right-hand' | 'left-hand';
+    isProfileComplete: boolean;
     fcmToken?: string;
     ranking: number;
     weeklyWins: number;
@@ -36,6 +40,9 @@ const mapBackendUserToUser = (backendUser: BackendUser): User => {
         email: backendUser.email,
         name: backendUser.name,
         photoUrl: backendUser.profilePicture,
+        gender: backendUser.gender,
+        phoneNumber: backendUser.phoneNumber,
+        gameType: backendUser.gameType,
         points: backendUser.ranking,
         totalWins: backendUser.totalWins,
         totalLosses: backendUser.totalLosses,
@@ -43,6 +50,7 @@ const mapBackendUserToUser = (backendUser: BackendUser): User => {
         winPercentage: backendUser.winPercentage,
         matchesPlayedWithDifferentPlayers: 0, // Not available from backend yet
         rank: backendUser.ranking,
+        isProfileComplete: backendUser.isProfileComplete,
     };
 };
 
@@ -138,7 +146,13 @@ export const authService = {
      * Update user profile
      * @param updates - Partial user updates
      */
-    updateProfile: async (updates: { name?: string; profilePicture?: string }): Promise<User> => {
+    updateProfile: async (updates: {
+        name?: string;
+        profilePicture?: string;
+        gender?: 'male' | 'female';
+        phoneNumber?: string;
+        gameType?: 'right-hand' | 'left-hand';
+    }): Promise<User> => {
         try {
             const response = await api.put<BackendUser>('/users/profile', updates);
             return mapBackendUserToUser(response.data);

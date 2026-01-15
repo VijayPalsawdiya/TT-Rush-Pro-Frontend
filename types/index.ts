@@ -19,6 +19,7 @@ export interface User {
     rank?: number;
     winPercentage: number;
     matchesPlayedWithDifferentPlayers: number;
+    isProfileComplete?: boolean; // Added for profile completion check
 }
 
 export interface Match {

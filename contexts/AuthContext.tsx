@@ -1,3 +1,5 @@
+import { clearTokens } from '@/services/api';
+import { authService } from '@/services/authService';
 import { User } from '@/types';
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -5,8 +7,6 @@ import { GoogleAuthProvider, getAuth, signInWithCredential } from '@react-native
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { authService } from '@/services/authService';
-import { clearTokens } from '@/services/api';
 
 const AUTH_KEY = '@auth_user';
 const ONBOARDING_KEY = '@onboarding_completed';
@@ -94,16 +94,26 @@ export const [AuthContext, useAuth] = createContextHook(() => {
         try {
             // ✅ Call backend API to update profile
             console.log('📡 Calling backend /users/profile API...');
-            const updatedUser = await authService.updateProfile({
-                name: updates.name,
-                profilePicture: updates.photoUrl,
-            });
 
-            console.log('✅ Profile updated successfully');
+            // Prepare update data for backend
+            const backendUpdates: any = {};
+            if (updates.name) backendUpdates.name = updates.name;
+            if (updates.photoUrl) backendUpdates.profilePicture = updates.photoUrl;
+            if (updates.gender) backendUpdates.gender = updates.gender;
+            if (updates.phoneNumber) backendUpdates.phoneNumber = updates.phoneNumber;
+            if (updates.gameType) backendUpdates.gameType = updates.gameType;
+
+            const updatedUser = await authService.updateProfile(backendUpdates);
+
+            console.log('✅ Profile updated successfully', {
+                isProfileComplete: updatedUser.isProfileComplete,
+            });
 
             // Update local storage
             await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(updatedUser));
             setUser(updatedUser);
+
+            return updatedUser;
         } catch (error) {
             console.error('❌ Error updating profile:', error);
 
@@ -111,6 +121,8 @@ export const [AuthContext, useAuth] = createContextHook(() => {
             const updatedUser = { ...user, ...updates };
             await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(updatedUser));
             setUser(updatedUser);
+
+            return updatedUser;
         }
     }, [user]);
 

@@ -29,8 +29,16 @@ export default function LoginScreen() {
 
     const handleGoogleSignIn = async () => {
         try {
-            await signInWithGoogle();
-            router.replace('/complete-profile');
+            const user = await signInWithGoogle();
+
+            // ✅ Check if profile is complete
+            if (!user?.isProfileComplete) {
+                console.log('📝 Profile incomplete, navigating to complete-profile');
+                router.replace('/complete-profile');
+            } else {
+                console.log('✅ Profile complete, navigating to home');
+                router.replace('/(tabs)/home');
+            }
         } catch (error) {
             console.log('Sign in failed:', error);
         }
