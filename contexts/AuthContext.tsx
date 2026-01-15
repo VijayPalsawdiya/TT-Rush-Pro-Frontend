@@ -1,10 +1,12 @@
 import { User } from '@/types';
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import auth from '@react-native-firebase/auth';
+import { GoogleAuthProvider, getAuth, signInWithCredential } from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
+import { authService } from '@/services/authService';
+import { clearTokens } from '@/services/api';
 
 const AUTH_KEY = '@auth_user';
 const ONBOARDING_KEY = '@onboarding_completed';
@@ -17,7 +19,7 @@ export const [AuthContext, useAuth] = createContextHook(() => {
 
     useEffect(() => {
         GoogleSignin.configure({
-            webClientId: '984760125211-4hdl8u3ijb2rf85h4cc10bclpif3eo6c.apps.googleusercontent.com', // TODO: Replace with your actual Web Client ID from Firebase Console -> Authentication -> Sign-in method -> Google -> Web SDK configuration
+            webClientId: '984760125211-4hdl8u3ijb2rf85h4cc10bclpif3eo6c.apps.googleusercontent.com',
         });
         loadUser();
     }, []);
@@ -57,30 +59,31 @@ export const [AuthContext, useAuth] = createContextHook(() => {
             }
 
             // Create a Google credential with the token
-            const googleCredential = auth.GoogleAuthProvider.credential(idToken);
+            const googleCredential = GoogleAuthProvider.credential(idToken);
 
             // Sign-in the user with the credential
-            const userCredential = await auth().signInWithCredential(googleCredential);
-            const firebaseUser = userCredential.user;
+            const userCredential = await signInWithCredential(getAuth(), googleCredential);
 
-            const newUser: User = {
-                id: firebaseUser.uid,
-                email: firebaseUser.email || '',
-                name: firebaseUser.displayName || 'Player',
-                photoUrl: firebaseUser.photoURL || undefined,
-                points: 0,
-                totalWins: 0,
-                totalLosses: 0,
-                totalMatches: 0,
-                winPercentage: 0,
-                matchesPlayedWithDifferentPlayers: 0,
-            };
+            // ✅ Call backend API with Google ID token
+            console.log('📡 Calling backend /auth/google API...');
+            const backendResponse = await authService.googleLogin(idToken);
 
+            console.log('✅ Backend login successful:', {
+                userId: backendResponse.user.id,
+                email: backendResponse.user.email,
+                hasTokens: !!backendResponse.accessToken,
+            });
+
+            // Use user data from backend
+            const newUser = backendResponse.user;
+
+            // Save user to AsyncStorage
             await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(newUser));
             setUser(newUser);
+
             return newUser;
         } catch (error) {
-            console.error('Error signing in:', error);
+            console.error('❌ Error signing in:', error);
             throw error;
         }
     }, []);
@@ -88,9 +91,27 @@ export const [AuthContext, useAuth] = createContextHook(() => {
     const updateProfile = useCallback(async (updates: Partial<User>) => {
         if (!user) return;
 
-        const updatedUser = { ...user, ...updates };
-        await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(updatedUser));
-        setUser(updatedUser);
+        try {
+            // ✅ Call backend API to update profile
+            console.log('📡 Calling backend /users/profile API...');
+            const updatedUser = await authService.updateProfile({
+                name: updates.name,
+                profilePicture: updates.photoUrl,
+            });
+
+            console.log('✅ Profile updated successfully');
+
+            // Update local storage
+            await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(updatedUser));
+            setUser(updatedUser);
+        } catch (error) {
+            console.error('❌ Error updating profile:', error);
+
+            // Fallback to local update if API fails
+            const updatedUser = { ...user, ...updates };
+            await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(updatedUser));
+            setUser(updatedUser);
+        }
     }, [user]);
 
     const completeOnboarding = useCallback(async () => {
@@ -99,17 +120,45 @@ export const [AuthContext, useAuth] = createContextHook(() => {
     }, []);
 
     const logout = useCallback(async () => {
-        await GoogleSignin.revokeAccess();
-        await GoogleSignin.signOut();
+        try {
+            // ✅ Call backend API to logout
+            console.log('📡 Calling backend /auth/logout API...');
+            await authService.logout();
+            console.log('✅ Backend logout successful');
+        } catch (error) {
+            console.error('⚠️ Backend logout error (continuing with local logout):', error);
+        }
+
+        try {
+            // Google Sign-In cleanup
+            await GoogleSignin.revokeAccess();
+            await GoogleSignin.signOut();
+        } catch (error) {
+            console.error('⚠️ Google sign-out error:', error);
+        }
+
+        try {
+            // Firebase auth cleanup
+            const auth = getAuth();
+            await auth.signOut();
+        } catch (error) {
+            console.error('⚠️ Firebase sign-out error:', error);
+        }
+
+        // Clear local storage
         await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY]);
+        await clearTokens();
+
         setUser(null);
-        await auth().signOut();
         setHasCompletedOnboarding(false);
         router.replace('/login');
     }, [router]);
 
     const deleteAccount = useCallback(async () => {
+        // Clear local storage
         await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY]);
+        await clearTokens();
+
         setUser(null);
         setHasCompletedOnboarding(false);
         router.replace('/login');
