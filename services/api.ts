@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiBaseUrl } from '@/config/api';
+import { API_ENDPOINTS } from '@/config/urls';
 
 const API_BASE_URL = getApiBaseUrl();
 const TOKEN_KEY = '@access_token';
@@ -90,7 +91,7 @@ async function authenticatedFetch<T>(
 
             if (refreshToken) {
                 try {
-                    const refreshResponse = await apiFetch<{ accessToken: string }>('/auth/refresh', {
+                    const refreshResponse = await apiFetch<{ accessToken: string }>(API_ENDPOINTS.AUTH.REFRESH_TOKEN, {
                         method: 'POST',
                         body: JSON.stringify({ refreshToken }),
                     });

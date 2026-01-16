@@ -6,6 +6,7 @@
 
 import { authService } from '@/services/authService';
 import { api } from '@/services/api';
+import { API_ENDPOINTS } from '@/config/urls';
 
 // ============================================
 // AUTHENTICATION EXAMPLES
@@ -109,7 +110,7 @@ export async function exampleGetStats() {
             totalLosses: number;
             winPercentage: number;
             ranking: number;
-        }>('/stats');
+        }>(API_ENDPOINTS.USER.STATS);
 
         console.log('User stats:', response.data);
         return response.data;
@@ -131,7 +132,7 @@ export async function exampleCreateMatch(challengeId: string, player2Id: string)
             player1: string;
             player2: string;
             status: string;
-        }>('/matches', {
+        }>(API_ENDPOINTS.MATCH.CREATE, {
             challengeId,
             player1: 'current-user-id', // Replace with actual user ID
             player2: player2Id,
@@ -151,7 +152,7 @@ export async function exampleCreateMatch(challengeId: string, player2Id: string)
  */
 export async function exampleUpdateMatchResult(matchId: string) {
     try {
-        const response = await api.put(`/matches/${matchId}/result`, {
+        const response = await api.put(API_ENDPOINTS.MATCH.UPDATE_RESULT(matchId), {
             score: {
                 player1Score: 11,
                 player2Score: 7,
@@ -179,7 +180,7 @@ export async function exampleGetLeaderboard() {
             totalWins: number;
             totalLosses: number;
             winPercentage: number;
-        }>>('/leaderboard?limit=100');
+        }>>(API_ENDPOINTS.LEADERBOARD.WITH_LIMIT(100));
 
         console.log('Leaderboard:', response.data);
         return response.data;
@@ -199,7 +200,7 @@ export async function exampleGetHomeData() {
             recentMatches: any[];
             activeChallenges: any[];
             topPlayers: any[];
-        }>('/home');
+        }>(API_ENDPOINTS.HOME.DASHBOARD);
 
         console.log('Home data:', response.data);
         return response.data;

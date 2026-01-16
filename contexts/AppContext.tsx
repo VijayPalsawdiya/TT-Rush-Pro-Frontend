@@ -1,19 +1,30 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import { useCallback, useEffect, useState } from 'react';
-import { Match, Challenge, Notification, User } from '@/types';
+import { Match, Challenge, Notification, User, LeaderboardEntry } from '@/types';
 import { mockUsers, mockMatches, mockChallenges, mockNotifications } from '@/mocks/data';
+import { leaderboardService } from '@/services/leaderboardService';
 
 const MATCHES_KEY = '@matches';
 const CHALLENGES_KEY = '@challenges';
 const NOTIFICATIONS_KEY = '@notifications';
 const USERS_KEY = '@users';
+const LEADERBOARD_CACHE_KEY = '@leaderboard_cache';
+const LEADERBOARD_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+interface LeaderboardCache {
+    data: LeaderboardEntry[];
+    timestamp: number;
+    gender?: 'male' | 'female';
+}
 
 export const [AppContext, useApp] = createContextHook(() => {
     const [matches, setMatches] = useState<Match[]>([]);
     const [challenges, setChallenges] = useState<Challenge[]>([]);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [users, setUsers] = useState<User[]>([]);
+    const [leaderboardCache, setLeaderboardCache] = useState<Map<string, LeaderboardCache>>(new Map());
+    const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -78,22 +89,60 @@ export const [AppContext, useApp] = createContextHook(() => {
         await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
     }, [notifications]);
 
-    const getLeaderboard = useCallback((gender?: 'male' | 'female') => {
-        let filtered = users.filter(u => u.matchesPlayedWithDifferentPlayers >= 5);
+    const getLeaderboard = useCallback(async (gender?: 'male' | 'female'): Promise<LeaderboardEntry[]> => {
+        const cacheKey = gender || 'all';
+        const cached = leaderboardCache.get(cacheKey);
+        const now = Date.now();
 
-        if (gender) {
-            filtered = filtered.filter(u => u.gender === gender);
+        // Return cached data if it's still fresh
+        if (cached && (now - cached.timestamp) < LEADERBOARD_CACHE_DURATION) {
+            console.log('📊 Returning cached leaderboard data');
+            return cached.data;
         }
 
-        return filtered.sort((a, b) => {
-            if (a.points !== b.points) return b.points - a.points;
-            if (a.winPercentage !== b.winPercentage) return b.winPercentage - a.winPercentage;
-            return b.totalMatches - a.totalMatches;
-        }).map((user, index) => ({
-            user,
-            rank: index + 1,
-        }));
-    }, [users]);
+        // Fetch fresh data from API
+        setIsLoadingLeaderboard(true);
+        try {
+            console.log('🔄 Fetching leaderboard from API...', { gender });
+            const data = await leaderboardService.getLeaderboard(gender);
+
+            // Update cache
+            const newCache = new Map(leaderboardCache);
+            newCache.set(cacheKey, {
+                data,
+                timestamp: now,
+                gender,
+            });
+            setLeaderboardCache(newCache);
+
+            console.log('✅ Leaderboard fetched successfully:', data.length, 'entries');
+            return data;
+        } catch (error) {
+            console.error('❌ Error fetching leaderboard:', error);
+
+            // Return cached data if available, even if expired
+            if (cached) {
+                console.log('⚠️ Returning expired cache due to error');
+                return cached.data;
+            }
+
+            // Fallback to mock data if no cache available
+            console.log('⚠️ Falling back to mock data');
+            const filtered = users.filter(u => u.matchesPlayedWithDifferentPlayers >= 5);
+            const genderFiltered = gender ? filtered.filter(u => u.gender === gender) : filtered;
+
+            return genderFiltered.sort((a, b) => {
+                if (a.points !== b.points) return b.points - a.points;
+                if (a.winPercentage !== b.winPercentage) return b.winPercentage - a.winPercentage;
+                return b.totalMatches - a.totalMatches;
+            }).map((user, index) => ({
+                user,
+                rank: index + 1,
+            }));
+        } finally {
+            setIsLoadingLeaderboard(false);
+        }
+    }, [leaderboardCache, users]);
 
     return {
         matches,
@@ -104,5 +153,6 @@ export const [AppContext, useApp] = createContextHook(() => {
         respondToChallenge,
         markNotificationRead,
         getLeaderboard,
+        isLoadingLeaderboard,
     };
 });

@@ -1,5 +1,6 @@
 import { User } from '@/types';
 import { api, setTokens, clearTokens } from './api';
+import { API_ENDPOINTS } from '@/config/urls';
 
 // Backend auth response types
 export interface BackendUser {
@@ -61,7 +62,7 @@ export const authService = {
      */
     googleLogin: async (idToken: string): Promise<{ user: User; accessToken: string; refreshToken: string }> => {
         try {
-            const response = await api.fetch<GoogleLoginResponse>('/auth/google', {
+            const response = await api.fetch<GoogleLoginResponse>(API_ENDPOINTS.AUTH.GOOGLE_LOGIN, {
                 method: 'POST',
                 body: JSON.stringify({ token: idToken }),
             });
@@ -89,7 +90,7 @@ export const authService = {
      */
     refreshAccessToken: async (refreshToken: string): Promise<string> => {
         try {
-            const response = await api.fetch<RefreshTokenResponse>('/auth/refresh', {
+            const response = await api.fetch<RefreshTokenResponse>(API_ENDPOINTS.AUTH.REFRESH_TOKEN, {
                 method: 'POST',
                 body: JSON.stringify({ refreshToken }),
             });
@@ -106,7 +107,7 @@ export const authService = {
      */
     logout: async (): Promise<void> => {
         try {
-            await api.post('/auth/logout');
+            await api.post(API_ENDPOINTS.AUTH.LOGOUT);
         } catch (error) {
             console.error('Logout error:', error);
             // Continue with local logout even if API call fails
@@ -122,7 +123,7 @@ export const authService = {
      */
     updateFCMToken: async (fcmToken: string): Promise<void> => {
         try {
-            await api.post('/users/fcm-token', { fcmToken });
+            await api.post(API_ENDPOINTS.USER.FCM_TOKEN, { fcmToken });
         } catch (error) {
             console.error('FCM token update error:', error);
             throw error;
@@ -134,7 +135,7 @@ export const authService = {
      */
     getProfile: async (): Promise<User> => {
         try {
-            const response = await api.get<BackendUser>('/users/profile');
+            const response = await api.get<BackendUser>(API_ENDPOINTS.USER.PROFILE);
             return mapBackendUserToUser(response.data);
         } catch (error) {
             console.error('Get profile error:', error);
@@ -154,7 +155,7 @@ export const authService = {
         gameType?: 'right-hand' | 'left-hand';
     }): Promise<User> => {
         try {
-            const response = await api.put<BackendUser>('/users/profile', updates);
+            const response = await api.put<BackendUser>(API_ENDPOINTS.USER.PROFILE, updates);
             return mapBackendUserToUser(response.data);
         } catch (error) {
             console.error('Update profile error:', error);

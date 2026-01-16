@@ -2,23 +2,37 @@ import FilterButtons from '@/components/FilterButtons';
 import ModeSelector from '@/components/ModeSelector';
 import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
+import { LeaderboardEntry } from '@/types';
 import { Image } from 'expo-image';
 import { Trophy } from 'lucide-react-native';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState, useEffect } from 'react';
+import { ScrollView, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 
 type FilterType = 'all' | 'male' | 'female';
 type ModeType = 'singles' | 'doubles';
 
 export default function LeaderboardScreen() {
-    const { getLeaderboard } = useApp();
+    const { getLeaderboard, isLoadingLeaderboard } = useApp();
     const [mode, setMode] = useState<ModeType>('singles');
     const [filter, setFilter] = useState<FilterType>('all');
+    const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
 
-    // For doubles, always show all users regardless of gender filter
-    const leaderboard = mode === 'doubles'
-        ? getLeaderboard(undefined)
-        : getLeaderboard(filter === 'all' ? undefined : filter);
+    // Fetch leaderboard data when filter or mode changes
+    useEffect(() => {
+        const fetchLeaderboard = async () => {
+            try {
+                // For doubles, always show all users regardless of gender filter
+                const gender = mode === 'doubles' ? undefined : (filter === 'all' ? undefined : filter);
+                const data = await getLeaderboard(gender);
+                setLeaderboard(data);
+            } catch (error) {
+                console.error('Error fetching leaderboard:', error);
+                // Error is already handled in AppContext with fallback to mock data
+            }
+        };
+
+        fetchLeaderboard();
+    }, [mode, filter, getLeaderboard]);
 
     return (
         <View style={styles.container}>
@@ -42,7 +56,12 @@ export default function LeaderboardScreen() {
             </View>
 
             <ScrollView contentContainerStyle={styles.list}>
-                {mode === 'singles' ? (
+                {isLoadingLeaderboard ? (
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color={Colors.primary} />
+                        <Text style={styles.loadingText}>Loading leaderboard...</Text>
+                    </View>
+                ) : mode === 'singles' ? (
                     // Singles Leaderboard
                     <>
                         {leaderboard.map((entry, index) => {
@@ -282,5 +301,16 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         paddingVertical: 48,
         lineHeight: 20,
+    },
+    loadingContainer: {
+        paddingVertical: 48,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+    },
+    loadingText: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+        textAlign: 'center',
     },
 });

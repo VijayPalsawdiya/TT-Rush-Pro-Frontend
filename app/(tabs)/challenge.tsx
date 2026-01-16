@@ -5,22 +5,54 @@ import PlayerProfileModal from '@/components/PlayerProfileModal';
 import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Challenge } from '@/types';
+import { Challenge, User } from '@/types';
+import { userService } from '@/services/userService';
 import { Image } from 'expo-image';
 import { Search } from 'lucide-react-native';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useState, useEffect } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, RefreshControl } from 'react-native';
 
 export default function ChallengeScreen() {
     const { user } = useAuth();
-    const { users, sendChallenge, matches } = useApp();
+    const { sendChallenge, matches } = useApp();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMode, setSelectedMode] = useState<'singles' | 'doubles'>('singles');
     const [singlesModalVisible, setSinglesModalVisible] = useState(false);
     const [doublesModalVisible, setDoublesModalVisible] = useState(false);
-    const [selectedPlayer, setSelectedPlayer] = useState<typeof users[0] | null>(null);
+    const [selectedPlayer, setSelectedPlayer] = useState<User | null>(null);
     const [profileModalVisible, setProfileModalVisible] = useState(false);
-    const [profilePlayer, setProfilePlayer] = useState<typeof users[0] | null>(null);
+    const [profilePlayer, setProfilePlayer] = useState<User | null>(null);
+    const [users, setUsers] = useState<User[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    // Fetch users on mount
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    const fetchUsers = async (isRefresh = false) => {
+        try {
+            if (isRefresh) {
+                setIsRefreshing(true);
+            } else {
+                setIsLoading(true);
+            }
+
+            const fetchedUsers = await userService.getAllUsers();
+            setUsers(fetchedUsers);
+        } catch (error) {
+            console.error('Error fetching users:', error);
+            // Keep existing data on error
+        } finally {
+            setIsLoading(false);
+            setIsRefreshing(false);
+        }
+    };
+
+    const onRefresh = () => {
+        fetchUsers(true);
+    };
 
     // Users available for challenges (excluding current user)
     const availableUsers = users.filter(u => u.id !== user?.id);
@@ -82,6 +114,15 @@ export default function ChallengeScreen() {
         setSelectedPlayer(null);
     };
 
+    if (isLoading && users.length === 0) {
+        return (
+            <View style={[styles.container, styles.loadingContainer]}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+                <Text style={styles.loadingText}>Loading players...</Text>
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
             <View style={styles.header}>
@@ -104,7 +145,16 @@ export default function ChallengeScreen() {
                 </View>
             </View>
 
-            <ScrollView contentContainerStyle={styles.list}>
+            <ScrollView
+                contentContainerStyle={styles.list}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={onRefresh}
+                        tintColor={Colors.primary}
+                    />
+                }
+            >
                 {filteredUsers.map(player => (
                     <View key={player.id} style={styles.playerCard}>
                         <TouchableOpacity
@@ -303,5 +353,15 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         textAlign: 'center',
         lineHeight: 20,
+    },
+    loadingContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 12,
+    },
+    loadingText: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+        marginTop: 8,
     },
 });

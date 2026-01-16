@@ -1,4 +1,5 @@
 import { api } from './api';
+import { API_ENDPOINTS } from '@/config/urls';
 
 export interface UploadImageResponse {
     url: string;
@@ -30,7 +31,7 @@ export const uploadService = {
                 base64Image = `data:image/jpeg;base64,${base64Image}`;
             }
 
-            const response = await api.post<UploadImageResponse>('/upload/image', {
+            const response = await api.post<UploadImageResponse>(API_ENDPOINTS.UPLOAD.IMAGE, {
                 image: base64Image,
                 folder,
             });
@@ -49,7 +50,7 @@ export const uploadService = {
      */
     deleteImage: async (publicId: string): Promise<void> => {
         try {
-            await api.post('/upload/image/delete', { publicId });
+            await api.post(API_ENDPOINTS.UPLOAD.IMAGE_DELETE, { publicId });
             console.log('✅ Image deleted from Cloudinary');
         } catch (error) {
             console.error('❌ Image delete failed:', error);

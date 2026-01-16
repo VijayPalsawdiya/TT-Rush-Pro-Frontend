@@ -1,21 +1,71 @@
 import Colors from '@/constants/colors';
-import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { homeService, HomeData } from '@/services/homeService';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { ChevronRight, TrendingUp, Trophy } from 'lucide-react-native';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, RefreshControl } from 'react-native';
 
 export default function HomeScreen() {
     const { user } = useAuth();
-    const { matches } = useApp();
     const router = useRouter();
+    const [homeData, setHomeData] = useState<HomeData | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
-    const upcomingMatches = matches.filter(m => m.status === 'upcoming');
-    const myMatches = matches.filter(m => m.status === 'completed');
+    // Fetch home data on mount
+    useEffect(() => {
+        fetchHomeData();
+    }, []);
+
+    const fetchHomeData = async (isRefresh = false) => {
+        try {
+            if (isRefresh) {
+                setIsRefreshing(true);
+            } else {
+                setIsLoading(true);
+            }
+
+            const data = await homeService.getHomeData();
+            setHomeData(data);
+        } catch (error) {
+            console.error('Error fetching home data:', error);
+            // Keep existing data on error
+        } finally {
+            setIsLoading(false);
+            setIsRefreshing(false);
+        }
+    };
+
+    const onRefresh = () => {
+        fetchHomeData(true);
+    };
+
+    const upcomingMatches = homeData?.upcomingMatches || [];
+    const recentMatches = homeData?.recentMatches || [];
+
+    if (isLoading && !homeData) {
+        return (
+            <View style={[styles.container, styles.loadingContainer]}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+                <Text style={styles.loadingText}>Loading home data...</Text>
+            </View>
+        );
+    }
 
     return (
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <ScrollView
+            style={styles.container}
+            contentContainerStyle={styles.content}
+            refreshControl={
+                <RefreshControl
+                    refreshing={isRefreshing}
+                    onRefresh={onRefresh}
+                    tintColor={Colors.primary}
+                />
+            }
+        >
             <View style={styles.header}>
                 <View style={styles.userInfo}>
                     {user?.photoUrl && (
@@ -93,7 +143,7 @@ export default function HomeScreen() {
             <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>My Recent Matches</Text>
-                    {myMatches.length > 3 && (
+                    {recentMatches.length > 3 && (
                         <TouchableOpacity
                             style={styles.viewAllBtn}
                             onPress={() => router.push('/recent-matches')}
@@ -104,8 +154,8 @@ export default function HomeScreen() {
                         </TouchableOpacity>
                     )}
                 </View>
-                {myMatches.length > 0 ? (
-                    myMatches.slice(0, 3).map(match => (
+                {recentMatches.length > 0 ? (
+                    recentMatches.slice(0, 3).map(match => (
                         <View key={match.id} style={styles.matchCard}>
                             <View style={styles.matchPlayers}>
                                 <View style={styles.player}>
@@ -303,5 +353,15 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         textAlign: 'center',
         paddingVertical: 24,
+    },
+    loadingContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 12,
+    },
+    loadingText: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+        marginTop: 8,
     },
 });
