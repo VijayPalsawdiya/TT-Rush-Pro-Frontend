@@ -128,6 +128,17 @@ export const NOTIFICATION_ENDPOINTS = {
     MARK_ALL_READ: '/notifications/read-all',
 } as const;
 
+/**
+ * Match Challenge Endpoints (Player-to-Player Challenges)
+ */
+export const MATCH_CHALLENGE_ENDPOINTS = {
+    SEND: '/match-challenges',
+    LIST: '/match-challenges',
+    ACCEPT: (challengeId: string) => `/match-challenges/${challengeId}/accept`,
+    REJECT: (challengeId: string) => `/match-challenges/${challengeId}/reject`,
+    STATUS: (userId: string) => `/match-challenges/status/${userId}`,
+} as const;
+
 // ============================================
 // COMPLETE ENDPOINTS OBJECT
 // ============================================
@@ -145,6 +156,7 @@ export const API_ENDPOINTS = {
     LEADERBOARD: LEADERBOARD_ENDPOINTS,
     HOME: HOME_ENDPOINTS,
     NOTIFICATION: NOTIFICATION_ENDPOINTS,
+    MATCH_CHALLENGE: MATCH_CHALLENGE_ENDPOINTS,
 } as const;
 
 // ============================================

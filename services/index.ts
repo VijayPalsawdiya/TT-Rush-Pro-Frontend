@@ -6,3 +6,5 @@ export * from './leaderboardService';
 export * from './homeService';
 export * from './challengeService';
 export * from './userService';
+export * from './matchChallengeService';
+export * from './notificationService';

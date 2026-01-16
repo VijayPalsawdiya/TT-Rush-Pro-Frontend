@@ -5,16 +5,17 @@ import PlayerProfileModal from '@/components/PlayerProfileModal';
 import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Challenge, User } from '@/types';
+import { User } from '@/types';
 import { userService } from '@/services/userService';
+import { matchChallengeService, ChallengeStatus } from '@/services/matchChallengeService';
 import { Image } from 'expo-image';
 import { Search } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, RefreshControl } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 
 export default function ChallengeScreen() {
     const { user } = useAuth();
-    const { sendChallenge, matches } = useApp();
+    const { matches } = useApp();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMode, setSelectedMode] = useState<'singles' | 'doubles'>('singles');
     const [singlesModalVisible, setSinglesModalVisible] = useState(false);
@@ -25,11 +26,19 @@ export default function ChallengeScreen() {
     const [users, setUsers] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [challengeStatuses, setChallengeStatuses] = useState<Record<string, ChallengeStatus>>({});
 
     // Fetch users on mount
     useEffect(() => {
         fetchUsers();
     }, []);
+
+    // Fetch challenge statuses when users change
+    useEffect(() => {
+        if (users.length > 0 && user) {
+            fetchChallengeStatuses();
+        }
+    }, [users, user]);
 
     const fetchUsers = async (isRefresh = false) => {
         try {
@@ -43,10 +52,31 @@ export default function ChallengeScreen() {
             setUsers(fetchedUsers);
         } catch (error) {
             console.error('Error fetching users:', error);
-            // Keep existing data on error
         } finally {
             setIsLoading(false);
             setIsRefreshing(false);
+        }
+    };
+
+    const fetchChallengeStatuses = async () => {
+        if (!user) return;
+
+        try {
+            const statuses: Record<string, ChallengeStatus> = {};
+
+            // Fetch status for each user
+            for (const targetUser of users.filter(u => u.id !== user.id)) {
+                try {
+                    const status = await matchChallengeService.getChallengeStatus(targetUser.id);
+                    statuses[targetUser.id] = status;
+                } catch (error) {
+                    console.error(`Error fetching status for ${targetUser.name}:`, error);
+                }
+            }
+
+            setChallengeStatuses(statuses);
+        } catch (error) {
+            console.error('Error fetching challenge statuses:', error);
         }
     };
 
@@ -65,22 +95,22 @@ export default function ChallengeScreen() {
     const handleSinglesChallenge = async (opponentId: string, opponentName: string, opponentPhoto?: string, message?: string) => {
         if (!user || !selectedPlayer) return;
 
-        const challenge: Challenge = {
-            id: `c${Date.now()}`,
-            fromUserId: user.id,
-            toUserId: selectedPlayer.id,
-            fromUserName: user.name,
-            toUserName: selectedPlayer.name,
-            fromUserPhoto: user.photoUrl,
-            toUserPhoto: selectedPlayer.photoUrl,
-            message: message,
-            status: 'pending',
-            createdAt: new Date(),
-            isSingles: true,
-        };
+        try {
+            await matchChallengeService.sendChallenge({
+                toUserId: selectedPlayer.id,
+                message: message,
+                isSingles: true,
+            });
 
-        await sendChallenge(challenge);
-        setSelectedPlayer(null);
+            Alert.alert('Success', `Challenge sent to ${selectedPlayer.name}!`);
+            setSinglesModalVisible(false);
+            setSelectedPlayer(null);
+
+            // Refresh challenge statuses
+            fetchChallengeStatuses();
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'Failed to send challenge');
+        }
     };
 
     const handleDoublesChallenge = async (
@@ -94,24 +124,44 @@ export default function ChallengeScreen() {
     ) => {
         if (!user || !selectedPlayer) return;
 
-        const challenge: Challenge = {
-            id: `c${Date.now()}`,
-            fromUserId: user.id,
-            toUserId: selectedPlayer.id,
-            fromUserName: user.name,
-            toUserName: selectedPlayer.name,
-            fromUserPhoto: user.photoUrl,
-            toUserPhoto: selectedPlayer.photoUrl,
-            partnerId: partnerId,
-            partnerName: partnerName,
-            message: message,
-            status: 'pending',
-            createdAt: new Date(),
-            isSingles: false,
-        };
+        try {
+            await matchChallengeService.sendChallenge({
+                toUserId: selectedPlayer.id,
+                message: message,
+                isSingles: false,
+                partnerId: partnerId,
+            });
 
-        await sendChallenge(challenge);
-        setSelectedPlayer(null);
+            Alert.alert('Success', `Doubles challenge sent to ${selectedPlayer.name}!`);
+            setDoublesModalVisible(false);
+            setSelectedPlayer(null);
+
+            // Refresh challenge statuses
+            fetchChallengeStatuses();
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'Failed to send challenge');
+        }
+    };
+
+    const getChallengeButtonText = (userId: string): string => {
+        const status = challengeStatuses[userId];
+        if (!status) return 'Challenge';
+
+        if (!status.canChallenge) {
+            if (status.reason === 'pending') {
+                return status.isSender ? 'Challenge Sent' : 'Pending';
+            }
+            if (status.reason === 'limit_reached') {
+                return 'Limit Reached';
+            }
+        }
+
+        return 'Challenge';
+    };
+
+    const isChallengeDisabled = (userId: string): boolean => {
+        const status = challengeStatuses[userId];
+        return status ? !status.canChallenge : false;
     };
 
     if (isLoading && users.length === 0) {
@@ -155,45 +205,61 @@ export default function ChallengeScreen() {
                     />
                 }
             >
-                {filteredUsers.map(player => (
-                    <View key={player.id} style={styles.playerCard}>
-                        <TouchableOpacity
-                            style={styles.playerInfo}
-                            onPress={() => {
-                                setProfilePlayer(player);
-                                setProfileModalVisible(true);
-                            }}
-                            activeOpacity={0.7}
-                        >
-                            {player.photoUrl && (
-                                <Image source={{ uri: player.photoUrl }} style={styles.avatar} />
-                            )}
-                            <View style={styles.playerDetails}>
-                                <Text style={styles.playerName}>{player.name}</Text>
-                                <View style={styles.playerStats}>
-                                    <Text style={styles.statText}>{player.points} pts</Text>
-                                    <Text style={styles.dot}>•</Text>
-                                    <Text style={styles.statText}>Rank #{player.rank || 'N/A'}</Text>
-                                </View>
-                            </View>
-                        </TouchableOpacity>
+                {filteredUsers.map(player => {
+                    const buttonText = getChallengeButtonText(player.id);
+                    const isDisabled = isChallengeDisabled(player.id);
 
-                        <TouchableOpacity
-                            style={styles.challengeBtn}
-                            onPress={() => {
-                                setSelectedPlayer(player);
-                                if (selectedMode === 'singles') {
-                                    setSinglesModalVisible(true);
-                                } else {
-                                    setDoublesModalVisible(true);
-                                }
-                            }}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={styles.challengeBtnText}>Challenge</Text>
-                        </TouchableOpacity>
-                    </View>
-                ))}
+                    return (
+                        <View key={player.id} style={styles.playerCard}>
+                            <TouchableOpacity
+                                style={styles.playerInfo}
+                                onPress={() => {
+                                    setProfilePlayer(player);
+                                    setProfileModalVisible(true);
+                                }}
+                                activeOpacity={0.7}
+                            >
+                                {player.photoUrl && (
+                                    <Image source={{ uri: player.photoUrl }} style={styles.avatar} />
+                                )}
+                                <View style={styles.playerDetails}>
+                                    <Text style={styles.playerName}>{player.name}</Text>
+                                    <View style={styles.playerStats}>
+                                        <Text style={styles.statText}>{player.points} pts</Text>
+                                        <Text style={styles.dot}>•</Text>
+                                        <Text style={styles.statText}>Rank #{player.rank || 'N/A'}</Text>
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[
+                                    styles.challengeBtn,
+                                    isDisabled && styles.challengeBtnDisabled
+                                ]}
+                                onPress={() => {
+                                    if (!isDisabled) {
+                                        setSelectedPlayer(player);
+                                        if (selectedMode === 'singles') {
+                                            setSinglesModalVisible(true);
+                                        } else {
+                                            setDoublesModalVisible(true);
+                                        }
+                                    }
+                                }}
+                                activeOpacity={isDisabled ? 1 : 0.7}
+                                disabled={isDisabled}
+                            >
+                                <Text style={[
+                                    styles.challengeBtnText,
+                                    isDisabled && styles.challengeBtnTextDisabled
+                                ]}>
+                                    {buttonText}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    );
+                })}
 
                 {availableUsers.length === 0 && (
                     <Text style={styles.emptyText}>No players found</Text>
@@ -256,20 +322,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: Colors.text,
     },
-    challengePlayerBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        paddingVertical: 14,
-        borderRadius: 12,
-        backgroundColor: Colors.primary,
-    },
-    challengePlayerBtnText: {
-        fontSize: 16,
-        fontWeight: '700' as const,
-        color: Colors.background,
-    },
     list: {
         paddingHorizontal: 20,
         paddingBottom: 24,
@@ -324,35 +376,23 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         borderRadius: 10,
     },
+    challengeBtnDisabled: {
+        backgroundColor: Colors.textTertiary,
+        opacity: 0.5,
+    },
     challengeBtnText: {
         fontSize: 14,
         fontWeight: '700' as const,
         color: Colors.background,
+    },
+    challengeBtnTextDisabled: {
+        color: Colors.textSecondary,
     },
     emptyText: {
         fontSize: 14,
         color: Colors.textSecondary,
         textAlign: 'center',
         paddingVertical: 48,
-    },
-    placeholder: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 40,
-        gap: 16,
-    },
-    placeholderTitle: {
-        fontSize: 20,
-        fontWeight: '700' as const,
-        color: Colors.text,
-        textAlign: 'center',
-    },
-    placeholderText: {
-        fontSize: 14,
-        color: Colors.textSecondary,
-        textAlign: 'center',
-        lineHeight: 20,
     },
     loadingContainer: {
         justifyContent: 'center',

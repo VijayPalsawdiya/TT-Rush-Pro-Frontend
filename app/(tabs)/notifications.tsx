@@ -1,28 +1,88 @@
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { Bell, Check, X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
-import { useApp } from '@/contexts/AppContext';
+import { notificationService, Notification } from '@/services/notificationService';
+import { matchChallengeService } from '@/services/matchChallengeService';
+import { useState, useEffect } from 'react';
 
 export default function NotificationsScreen() {
     const { user } = useAuth();
-    const { notifications, markNotificationRead, respondToChallenge } = useApp();
+    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
-    const userNotifications = notifications.filter(n => n.userId === user?.id);
+    useEffect(() => {
+        fetchNotifications();
+    }, []);
+
+    const fetchNotifications = async (isRefresh = false) => {
+        try {
+            if (isRefresh) {
+                setIsRefreshing(true);
+            } else {
+                setIsLoading(true);
+            }
+
+            const fetchedNotifications = await notificationService.getNotifications();
+            setNotifications(fetchedNotifications);
+        } catch (error) {
+            console.error('Error fetching notifications:', error);
+        } finally {
+            setIsLoading(false);
+            setIsRefreshing(false);
+        }
+    };
+
+    const onRefresh = () => {
+        fetchNotifications(true);
+    };
 
     const handleAccept = async (notificationId: string, challengeId?: string) => {
-        if (challengeId) {
-            await respondToChallenge(challengeId, true);
+        if (!challengeId) return;
+
+        try {
+            await matchChallengeService.acceptChallenge(challengeId);
+            await notificationService.markAsRead(notificationId);
+
+            Alert.alert('Success', 'Challenge accepted!');
+            fetchNotifications();
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'Failed to accept challenge');
         }
-        await markNotificationRead(notificationId);
     };
 
     const handleReject = async (notificationId: string, challengeId?: string) => {
-        if (challengeId) {
-            await respondToChallenge(challengeId, false);
+        if (!challengeId) return;
+
+        try {
+            await matchChallengeService.rejectChallenge(challengeId);
+            await notificationService.markAsRead(notificationId);
+
+            Alert.alert('Success', 'Challenge rejected');
+            fetchNotifications();
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'Failed to reject challenge');
         }
-        await markNotificationRead(notificationId);
     };
+
+    const handleMarkAsRead = async (notificationId: string) => {
+        try {
+            await notificationService.markAsRead(notificationId);
+            fetchNotifications();
+        } catch (error) {
+            console.error('Error marking notification as read:', error);
+        }
+    };
+
+    if (isLoading && notifications.length === 0) {
+        return (
+            <View style={[styles.container, styles.loadingContainer]}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+                <Text style={styles.loadingText}>Loading notifications...</Text>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
@@ -30,9 +90,27 @@ export default function NotificationsScreen() {
                 <Text style={styles.title}>Notifications</Text>
             </View>
 
-            <ScrollView contentContainerStyle={styles.list}>
-                {userNotifications.map(notification => (
-                    <View key={notification.id} style={[styles.notificationCard, !notification.read && styles.unread]}>
+            <ScrollView
+                contentContainerStyle={styles.list}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={onRefresh}
+                        tintColor={Colors.primary}
+                    />
+                }
+            >
+                {notifications.map(notification => (
+                    <TouchableOpacity
+                        key={notification._id}
+                        style={[styles.notificationCard, !notification.read && styles.unread]}
+                        onPress={() => {
+                            if (!notification.read) {
+                                handleMarkAsRead(notification._id);
+                            }
+                        }}
+                        activeOpacity={0.7}
+                    >
                         <View style={styles.iconContainer}>
                             <Bell size={20} color={Colors.primary} />
                         </View>
@@ -44,11 +122,14 @@ export default function NotificationsScreen() {
                                 {new Date(notification.createdAt).toLocaleDateString()}
                             </Text>
 
-                            {notification.type === 'challenge-request' && !notification.read && (
+                            {notification.type === 'challenge-received' && !notification.read && (
                                 <View style={styles.actions}>
                                     <TouchableOpacity
                                         style={[styles.actionBtn, styles.acceptBtn]}
-                                        onPress={() => handleAccept(notification.id, notification.challengeId)}
+                                        onPress={(e) => {
+                                            e.stopPropagation();
+                                            handleAccept(notification._id, notification.relatedId);
+                                        }}
                                         activeOpacity={0.7}
                                     >
                                         <Check size={16} color={Colors.background} />
@@ -56,7 +137,10 @@ export default function NotificationsScreen() {
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         style={[styles.actionBtn, styles.rejectBtn]}
-                                        onPress={() => handleReject(notification.id, notification.challengeId)}
+                                        onPress={(e) => {
+                                            e.stopPropagation();
+                                            handleReject(notification._id, notification.relatedId);
+                                        }}
                                         activeOpacity={0.7}
                                     >
                                         <X size={16} color={Colors.background} />
@@ -65,10 +149,10 @@ export default function NotificationsScreen() {
                                 </View>
                             )}
                         </View>
-                    </View>
+                    </TouchableOpacity>
                 ))}
 
-                {userNotifications.length === 0 && (
+                {notifications.length === 0 && (
                     <Text style={styles.emptyText}>No notifications yet</Text>
                 )}
             </ScrollView>
@@ -164,5 +248,15 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         textAlign: 'center',
         paddingVertical: 48,
+    },
+    loadingContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 12,
+    },
+    loadingText: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+        marginTop: 8,
     },
 });
