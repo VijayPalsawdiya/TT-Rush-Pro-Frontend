@@ -2,19 +2,43 @@ import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator
 import { Bell, Check, X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSocket } from '@/contexts/SocketContext';
 import { notificationService, Notification } from '@/services/notificationService';
-import { matchChallengeService } from '@/services/matchChallengeService';
+import { matchChallengeService, MatchChallenge } from '@/services/matchChallengeService';
+import PartnerSelectionModal from '@/components/PartnerSelectionModal';
 import { useState, useEffect } from 'react';
 
 export default function NotificationsScreen() {
     const { user } = useAuth();
+    const { socket, isConnected } = useSocket();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [partnerModalVisible, setPartnerModalVisible] = useState(false);
+    const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
+    const [selectedChallenge, setSelectedChallenge] = useState<MatchChallenge | null>(null);
 
     useEffect(() => {
         fetchNotifications();
     }, []);
+
+    // Listen for socket events
+    useEffect(() => {
+        if (!socket) return;
+
+        console.log('🎧 Setting up socket listeners for notifications screen');
+
+        // Listen for new notifications
+        socket.on('notification:new', (notification) => {
+            console.log('📥 Received notification:new event', notification);
+            fetchNotifications(); // Refresh notifications
+        });
+
+        // Cleanup listener
+        return () => {
+            socket.off('notification:new');
+        };
+    }, [socket]);
 
     const fetchNotifications = async (isRefresh = false) => {
         try {
@@ -38,14 +62,58 @@ export default function NotificationsScreen() {
         fetchNotifications(true);
     };
 
-    const handleAccept = async (notificationId: string, challengeId?: string) => {
+    const handleAccept = async (notification: Notification) => {
+        const challengeId = notification.relatedId;
         if (!challengeId) return;
 
         try {
-            await matchChallengeService.acceptChallenge(challengeId);
-            await notificationService.markAsRead(notificationId);
+            // Fetch challenge details to check if it's doubles
+            const challenges = await matchChallengeService.getChallenges();
+            const challenge = challenges.find((c: MatchChallenge) => c._id === challengeId);
 
-            Alert.alert('Success', 'Challenge accepted!');
+            if (!challenge) {
+                Alert.alert('Error', 'Challenge not found');
+                return;
+            }
+
+            // If doubles, show partner selection modal
+            if (!challenge.isSingles) {
+                setSelectedNotification(notification);
+                setSelectedChallenge(challenge);
+                setPartnerModalVisible(true);
+            } else {
+                // Singles - accept immediately
+                await matchChallengeService.acceptChallenge(challengeId);
+                await notificationService.markAsRead(notification._id);
+
+                Alert.alert(
+                    'Challenge Accepted!',
+                    'A match has been created and will appear in your Upcoming Matches on the Home screen.',
+                    [{ text: 'OK' }]
+                );
+                fetchNotifications();
+            }
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'Failed to accept challenge');
+        }
+    };
+
+    const handlePartnerSelected = async (partnerId: string, partnerName: string) => {
+        if (!selectedNotification || !selectedChallenge) return;
+
+        try {
+            await matchChallengeService.acceptChallenge(selectedChallenge._id, partnerId);
+            await notificationService.markAsRead(selectedNotification._id);
+
+            Alert.alert(
+                'Challenge Accepted!',
+                `You and ${partnerName} will face ${selectedChallenge.fromUser?.name || 'the challenger'}. Match will appear in Upcoming Matches.`,
+                [{ text: 'OK' }]
+            );
+
+            setPartnerModalVisible(false);
+            setSelectedNotification(null);
+            setSelectedChallenge(null);
             fetchNotifications();
         } catch (error: any) {
             Alert.alert('Error', error.message || 'Failed to accept challenge');
@@ -128,7 +196,7 @@ export default function NotificationsScreen() {
                                         style={[styles.actionBtn, styles.acceptBtn]}
                                         onPress={(e) => {
                                             e.stopPropagation();
-                                            handleAccept(notification._id, notification.relatedId);
+                                            handleAccept(notification);
                                         }}
                                         activeOpacity={0.7}
                                     >
@@ -156,6 +224,22 @@ export default function NotificationsScreen() {
                     <Text style={styles.emptyText}>No notifications yet</Text>
                 )}
             </ScrollView>
+
+            {/* Partner Selection Modal for Doubles */}
+            <PartnerSelectionModal
+                visible={partnerModalVisible}
+                onClose={() => {
+                    setPartnerModalVisible(false);
+                    setSelectedNotification(null);
+                    setSelectedChallenge(null);
+                }}
+                onSelectPartner={handlePartnerSelected}
+                excludeUserIds={[
+                    user?.id || '',
+                    selectedChallenge?.fromUser?._id || '',
+                    selectedChallenge?.partnerId?._id || ''
+                ].filter(Boolean)}
+            />
         </View>
     );
 }

@@ -20,12 +20,35 @@ interface BackendUser {
 
 interface BackendMatch {
     _id: string;
-    player1: {
+    isSingles: boolean;
+    // Singles fields
+    player1?: {
         _id: string;
         name: string;
         profilePicture?: string;
     };
-    player2: {
+    player2?: {
+        _id: string;
+        name: string;
+        profilePicture?: string;
+    };
+    // Doubles fields
+    team1Player1?: {
+        _id: string;
+        name: string;
+        profilePicture?: string;
+    };
+    team1Player2?: {
+        _id: string;
+        name: string;
+        profilePicture?: string;
+    };
+    team2Player1?: {
+        _id: string;
+        name: string;
+        profilePicture?: string;
+    };
+    team2Player2?: {
         _id: string;
         name: string;
         profilePicture?: string;
@@ -103,22 +126,46 @@ const mapBackendUserToFrontend = (backendUser: BackendUser): User => {
 
 // Convert backend match to frontend format
 const mapBackendMatchToFrontend = (backendMatch: BackendMatch): Match => {
-    return {
-        id: backendMatch._id,
-        player1Id: backendMatch.player1._id,
-        player2Id: backendMatch.player2._id,
-        player1Name: backendMatch.player1.name,
-        player2Name: backendMatch.player2.name,
-        player1Photo: backendMatch.player1.profilePicture,
-        player2Photo: backendMatch.player2.profilePicture,
-        winnerId: backendMatch.winner?._id,
-        status: backendMatch.status === 'pending' ? 'upcoming' :
-            backendMatch.status === 'completed' ? 'completed' : 'upcoming',
-        scheduledDate: new Date(backendMatch.matchDate),
-        completedDate: backendMatch.status === 'completed' ? new Date(backendMatch.createdAt) : undefined,
-        player1Points: backendMatch.score.player1Score,
-        player2Points: backendMatch.score.player2Score,
-    };
+    if (backendMatch.isSingles) {
+        // Singles match
+        return {
+            id: backendMatch._id,
+            player1Id: backendMatch.player1?._id || '',
+            player2Id: backendMatch.player2?._id || '',
+            player1Name: backendMatch.player1?.name || 'Unknown',
+            player2Name: backendMatch.player2?.name || 'Unknown',
+            player1Photo: backendMatch.player1?.profilePicture,
+            player2Photo: backendMatch.player2?.profilePicture,
+            winnerId: backendMatch.winner?._id,
+            status: backendMatch.status === 'pending' ? 'upcoming' :
+                backendMatch.status === 'completed' ? 'completed' : 'upcoming',
+            scheduledDate: new Date(backendMatch.matchDate),
+            completedDate: backendMatch.status === 'completed' ? new Date(backendMatch.createdAt) : undefined,
+            player1Points: backendMatch.score.player1Score,
+            player2Points: backendMatch.score.player2Score,
+        };
+    } else {
+        // Doubles match - combine team names
+        const team1Name = `${backendMatch.team1Player1?.name || 'Unknown'} & ${backendMatch.team1Player2?.name || 'Unknown'}`;
+        const team2Name = `${backendMatch.team2Player1?.name || 'Unknown'} & ${backendMatch.team2Player2?.name || 'Unknown'}`;
+
+        return {
+            id: backendMatch._id,
+            player1Id: backendMatch.team1Player1?._id || '',
+            player2Id: backendMatch.team2Player1?._id || '',
+            player1Name: team1Name,
+            player2Name: team2Name,
+            player1Photo: backendMatch.team1Player1?.profilePicture,
+            player2Photo: backendMatch.team2Player1?.profilePicture,
+            winnerId: backendMatch.winner?._id,
+            status: backendMatch.status === 'pending' ? 'upcoming' :
+                backendMatch.status === 'completed' ? 'completed' : 'upcoming',
+            scheduledDate: new Date(backendMatch.matchDate),
+            completedDate: backendMatch.status === 'completed' ? new Date(backendMatch.createdAt) : undefined,
+            player1Points: backendMatch.score.player1Score,
+            player2Points: backendMatch.score.player2Score,
+        };
+    }
 };
 
 export const homeService = {

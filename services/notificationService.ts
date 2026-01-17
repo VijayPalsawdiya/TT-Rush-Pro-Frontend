@@ -5,12 +5,20 @@ import { API_ENDPOINTS } from '@/config/urls';
 export interface Notification {
     _id: string;
     userId: string;
-    type: 'challenge-received' | 'challenge-sent' | 'challenge-accepted' | 'challenge-rejected' | 'match-result' | 'system';
     title: string;
     message: string;
+    type: 'challenge-received' | 'challenge-sent' | 'challenge-accepted' | 'challenge-rejected' | 'match-reminder' | 'general';
     relatedId?: string;
     read: boolean;
     createdAt: string;
+    updatedAt: string;
+    challengeDetails?: {
+        isSingles: boolean;
+        challengerId: string;
+        challengerName: string;
+        challengerPartnerId?: string;
+        challengerPartnerName?: string;
+    };
 }
 
 export const notificationService = {

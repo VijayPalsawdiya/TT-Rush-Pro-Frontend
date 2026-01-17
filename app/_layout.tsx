@@ -1,5 +1,6 @@
 import { AppContext } from "@/contexts/AppContext";
 import { AuthContext, useAuth } from "@/contexts/AuthContext";
+import { SocketProvider } from "@/contexts/SocketContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -66,9 +67,11 @@ export default function RootLayout() {
             <QueryClientProvider client={queryClient}>
                 <GestureHandlerRootView style={{ flex: 1 }}>
                     <AuthContext>
-                        <AppContext>
-                            <RootLayoutNav />
-                        </AppContext>
+                        <SocketProvider>
+                            <AppContext>
+                                <RootLayoutNav />
+                            </AppContext>
+                        </SocketProvider>
                     </AuthContext>
                 </GestureHandlerRootView>
             </QueryClientProvider>

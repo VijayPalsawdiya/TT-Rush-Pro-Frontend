@@ -1,5 +1,5 @@
-import { api } from './api';
 import { API_ENDPOINTS } from '@/config/urls';
+import { api } from './api';
 
 // Backend match challenge types
 export interface MatchChallenge {
@@ -76,10 +76,11 @@ export const matchChallengeService = {
     /**
      * Accept a challenge
      */
-    acceptChallenge: async (challengeId: string): Promise<MatchChallenge> => {
+    acceptChallenge: async (challengeId: string, accepterPartnerId?: string): Promise<MatchChallenge> => {
         try {
             const response = await api.put<MatchChallenge>(
-                API_ENDPOINTS.MATCH_CHALLENGE.ACCEPT(challengeId)
+                API_ENDPOINTS.MATCH_CHALLENGE.ACCEPT(challengeId),
+                { accepterPartnerId }
             );
             return response.data;
         } catch (error) {
@@ -112,9 +113,24 @@ export const matchChallengeService = {
             const response = await api.get<ChallengeStatus>(
                 API_ENDPOINTS.MATCH_CHALLENGE.STATUS(userId)
             );
+            console.log('match-challenges/status')
             return response.data;
         } catch (error) {
             console.error('Get challenge status error:', error);
+            throw error;
+        }
+    },
+
+    getBatchChallengeStatus: async (userIds: string[]): Promise<Record<string, ChallengeStatus>> => {
+        try {
+            const response = await api.post<Record<string, ChallengeStatus>>(
+                API_ENDPOINTS.MATCH_CHALLENGE.BATCH_STATUS,
+                { userIds }
+            );
+            console.log('✅ Batch status fetched for', userIds.length, 'users');
+            return response.data;
+        } catch (error) {
+            console.error('Get batch challenge status error:', error);
             throw error;
         }
     },

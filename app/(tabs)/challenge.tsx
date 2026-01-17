@@ -10,7 +10,7 @@ import { userService } from '@/services/userService';
 import { matchChallengeService, ChallengeStatus } from '@/services/matchChallengeService';
 import { Image } from 'expo-image';
 import { Search } from 'lucide-react-native';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 
 export default function ChallengeScreen() {
@@ -27,18 +27,21 @@ export default function ChallengeScreen() {
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [challengeStatuses, setChallengeStatuses] = useState<Record<string, ChallengeStatus>>({});
+    const hasFetchedStatuses = useRef(false);
+    const isFetchingStatuses = useRef(false);
 
     // Fetch users on mount
     useEffect(() => {
         fetchUsers();
     }, []);
 
-    // Fetch challenge statuses when users change
+    // Fetch challenge statuses only once when users are loaded
     useEffect(() => {
-        if (users.length > 0 && user) {
+        if (users.length > 0 && user && !hasFetchedStatuses.current && !isFetchingStatuses.current) {
+            hasFetchedStatuses.current = true;
             fetchChallengeStatuses();
         }
-    }, [users, user]);
+    }, [users.length, user]);
 
     const fetchUsers = async (isRefresh = false) => {
         try {
@@ -59,28 +62,34 @@ export default function ChallengeScreen() {
     };
 
     const fetchChallengeStatuses = async () => {
-        if (!user) return;
+        if (!user || isFetchingStatuses.current) return;
+
+        isFetchingStatuses.current = true;
+        console.log('🔄 Fetching challenge statuses (BATCH)...');
 
         try {
-            const statuses: Record<string, ChallengeStatus> = {};
+            const availableUsers = users.filter(u => u.id !== user.id);
+            const userIds = availableUsers.map(u => u.id);
 
-            // Fetch status for each user
-            for (const targetUser of users.filter(u => u.id !== user.id)) {
-                try {
-                    const status = await matchChallengeService.getChallengeStatus(targetUser.id);
-                    statuses[targetUser.id] = status;
-                } catch (error) {
-                    console.error(`Error fetching status for ${targetUser.name}:`, error);
-                }
+            if (userIds.length === 0) {
+                setChallengeStatuses({});
+                return;
             }
 
+            // Use batch endpoint - ONE API call instead of N calls
+            const statuses = await matchChallengeService.getBatchChallengeStatus(userIds);
+
             setChallengeStatuses(statuses);
+            console.log('✅ Batch challenge statuses fetched:', Object.keys(statuses).length, 'users');
         } catch (error) {
             console.error('Error fetching challenge statuses:', error);
+        } finally {
+            isFetchingStatuses.current = false;
         }
     };
 
     const onRefresh = () => {
+        hasFetchedStatuses.current = false; // Reset to allow refetch
         fetchUsers(true);
     };
 
@@ -107,6 +116,7 @@ export default function ChallengeScreen() {
             setSelectedPlayer(null);
 
             // Refresh challenge statuses
+            hasFetchedStatuses.current = false;
             fetchChallengeStatuses();
         } catch (error: any) {
             Alert.alert('Error', error.message || 'Failed to send challenge');
@@ -137,6 +147,7 @@ export default function ChallengeScreen() {
             setSelectedPlayer(null);
 
             // Refresh challenge statuses
+            hasFetchedStatuses.current = false;
             fetchChallengeStatuses();
         } catch (error: any) {
             Alert.alert('Error', error.message || 'Failed to send challenge');

@@ -137,6 +137,7 @@ export const MATCH_CHALLENGE_ENDPOINTS = {
     ACCEPT: (challengeId: string) => `/match-challenges/${challengeId}/accept`,
     REJECT: (challengeId: string) => `/match-challenges/${challengeId}/reject`,
     STATUS: (userId: string) => `/match-challenges/status/${userId}`,
+    BATCH_STATUS: '/match-challenges/status/batch',
 } as const;
 
 // ============================================

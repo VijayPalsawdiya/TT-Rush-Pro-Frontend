@@ -1,5 +1,6 @@
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSocket } from '@/contexts/SocketContext';
 import { homeService, HomeData } from '@/services/homeService';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -9,6 +10,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator
 
 export default function HomeScreen() {
     const { user } = useAuth();
+    const { socket, isConnected } = useSocket();
     const router = useRouter();
     const [homeData, setHomeData] = useState<HomeData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -18,6 +20,31 @@ export default function HomeScreen() {
     useEffect(() => {
         fetchHomeData();
     }, []);
+
+    // Listen for socket events
+    useEffect(() => {
+        if (!socket) return;
+
+        console.log('🎧 Setting up socket listeners for home screen');
+
+        // Listen for new matches
+        socket.on('match:created', (match) => {
+            console.log('📥 Received match:created event', match);
+            fetchHomeData(); // Refresh home data
+        });
+
+        // Listen for match updates
+        socket.on('match:updated', (match) => {
+            console.log('📥 Received match:updated event', match);
+            fetchHomeData(); // Refresh home data
+        });
+
+        // Cleanup listeners
+        return () => {
+            socket.off('match:created');
+            socket.off('match:updated');
+        };
+    }, [socket]);
 
     const fetchHomeData = async (isRefresh = false) => {
         try {
